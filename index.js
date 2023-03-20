@@ -11,6 +11,12 @@ const rp = require('request-promise');
 const rax = require('retry-axios');
 const fsPromises = require("fs").promises;
 const moment = require('moment');
+const keys = [
+    "key1",
+    "key2",
+    "key3"
+];
+const logsWebhook = "https://discord.com/api/webhooks/ID/TOKEN"
 
 function getFileUpdatedDate(path) {
     const stats = fs.statSync(path)
@@ -114,13 +120,24 @@ app.get(['/'], async (req, res) => {
         res.status(400).send("Merci de spécifier des paramètres.");
         return;
     }
-    console.log("request");
+    const apiKey = req.query.apiKey;
     const year = req.query.year;
     let group = req.query.group.toUpperCase();
     const orientation = (req.query.orientation.toUpperCase() || 'TI');
     const timeoutBeforeRefresh = 1800000;
     const nameICS = orientation + '-' + year + "-" + group;
     const filename = nameICS + ".ics";
+
+    if (!apiKey) {
+        res.status(400).send("La clé API est manquante.");
+        return;
+    }
+
+    if (!keys.includes(apiKey)) {
+        res.status(401).send("Votre clé API est incorrecte");
+        return;
+    }
+
     if (group.includes(".ics"))
         group = group.replace(".ics", "");
 
@@ -150,6 +167,23 @@ app.get(['/'], async (req, res) => {
             return status < 500;
         }
     });
+    console.log(`Requête envoyée par ${apiKey}`)
+    const data = {
+        content: `J'ai reçu une requête API venant de la clé **${apiKey}**`
+    };
+    const options = {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        }
+    };
+
+    const send = https.request(logsWebhook, options, res => {
+        console.log(`StatusCode: ${res.statusCode}`);
+    });
+    send.write(JSON.stringify(data));
+    send.end();
+
     try {
         if (!checkFileExist(ICSDirectory + "/" + filename) || Math.abs(new Date(new Date().toUTCString()) - getFileUpdatedDate(ICSDirectory + "/" + filename)) >= timeoutBeforeRefresh) {
             const requestOrientations = await (instance.get('/orientations'));
